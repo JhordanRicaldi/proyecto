@@ -9,6 +9,9 @@ import Favorites from './components/Favorites'
 import Recommendations from './components/Recommendations'
 import Recipes from './components/Recipes'
 
+
+
+
 export default function App() {
   return (
     <Router>

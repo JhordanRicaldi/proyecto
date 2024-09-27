@@ -89,7 +89,7 @@ export default function RegisterDish() {
     formData.append('file', image);
 
     try {
-      const response = await fetch('https://potential-pancake-wq56x45q6q5h79x-5001.app.github.dev/predict', {
+      const response = await fetch('https://vercel-flask-dun-nine.vercel.app/predict', {
         method: 'POST',
         body: formData,
       });
