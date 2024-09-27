@@ -1,55 +1,52 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import tensorflow as tf
-import numpy as np
-from PIL import Image
-import io
-import h5py
+from gradio_client import Client, handle_file
+import tempfile
 
 app = Flask(__name__)
 CORS(app)
 
-# Función para cargar el modelo en dos partes
-def load_model_in_parts():
-    model = tf.keras.models.Model()
-    with h5py.File('modelo_alimentos_parte1.h5', 'r') as f1, h5py.File('modelo_alimentos_parte2.h5', 'r') as f2:
-        for key in f1.keys():
-            weight = f1[key][:]
-            model.add(tf.keras.layers.Dense(weight.shape[1], input_shape=(weight.shape[0],)))
-            model.layers[-1].set_weights([weight])
-        for key in f2.keys():
-            weight = f2[key][:]
-            model.add(tf.keras.layers.Dense(weight.shape[1]))
-            model.layers[-1].set_weights([weight])
-    return model
+# Ruta del modelo en Hugging Face
+MODEL_NAME = "Jhordan12345/food-predictor"
 
-# Cargar el modelo
-model = load_model_in_parts()
+# Crear una instancia del cliente
+client = Client(MODEL_NAME)
 
-# El resto de tu código permanece igual
-def load_and_preprocess_image(image):
-    image = image.resize((224, 224))
-    image = np.array(image) / 255.0
-    return np.expand_dims(image, axis=0)
+def call_hugging_face_api(image):
+    # Guardar el archivo en una ubicación temporal
+    temp_file = tempfile.NamedTemporaryFile(suffix='.jpg', delete=False)
+    image.save(temp_file.name)
+
+    # Llamar a la función handle_file con la ruta del archivo temporal
+    result = client.predict(img=handle_file(temp_file.name), api_name="/predict")
+    return result
 
 @app.route('/predict', methods=['POST'])
 def predict():
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file uploaded'}), 400
-    
-    file = request.files['file']
-    img = Image.open(io.BytesIO(file.read()))
-    
-    processed_image = load_and_preprocess_image(img)
-    prediction = model.predict(processed_image)
-    
-    proteins, carbs, fats = prediction[0]
-    
-    return jsonify({
-        'proteins': float(proteins),
-        'carbs': float(carbs),
-        'fats': float(fats)
-    })
+    # Obtener la imagen de la solicitud
+    image = request.files['file']
+
+    # Llamar a la API de Hugging Face
+    result = call_hugging_face_api(image)
+
+    # Procesar el resultado
+    if result is not None:
+        # Ajustar esta parte según el formato real de la respuesta
+        try:
+            # Suponiendo que la respuesta es un diccionario con las claves correspondientes
+            proteins = result.get('Proteínas (g)', 0)
+            carbs = result.get('Carbohidratos (g)', 0)
+            fats = result.get('Grasas (g)', 0)
+
+            return jsonify({
+                'proteins': float(proteins),
+                "carbs": float(carbs),
+                'fats': float(fats)
+            })
+        except (ValueError, TypeError) as e:
+            return jsonify({'error': 'Error al procesar los valores de predicción'}), 500
+    else:
+        return jsonify({'error': 'Error en la predicción'}), 500
 
 @app.route('/info', methods=['GET'])
 def info():
@@ -68,4 +65,4 @@ def info():
     })
 
 if __name__ == '__main__':
-    app.run(debug=True, host='127.0.0.1', port=5001)
+    app.run(debug=True, host='127.0.0.1', port=5005)
